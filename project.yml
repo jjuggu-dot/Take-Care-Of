@@ -25,6 +25,7 @@ targets:
         INFOPLIST_KEY_WKWatchOnly: YES
         INFOPLIST_KEY_WKApplication: YES
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_NSMotionUsageDescription: 산책할 때 걸음 수를 세어 까마귀 보상을 주는 데 사용해요.
         CODE_SIGN_STYLE: Automatic
         TARGETED_DEVICE_FAMILY: "4"
         SKIP_INSTALL: NO
