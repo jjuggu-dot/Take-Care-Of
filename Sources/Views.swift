@@ -131,7 +131,10 @@ struct RootView: View {
     var body: some View {
         content
             .onReceive(slow) { _ in model.tick() }
-            .onReceive(fast) { _ in if model.worm != nil || model.shiny != nil { model.gameTick() } }
+            .onReceive(fast) { _ in
+                if model.worm != nil || model.shiny != nil { model.gameTick() }
+                if model.rub != nil { model.rubTick() }
+            }
             .onChange(of: phase) { _, new in if new != .active { model.save() } }
     }
 
@@ -194,14 +197,12 @@ struct HomeView: View {
                     Scene.draw(Stage(context: context, size: canvasSize, width: 198, height: 242), model: model)
                 }
                 .contentShape(Rectangle())
-                .gesture(SpatialTapGesture().onEnded { v in
-                    model.tapScene(logical(v.location, size))
-                })
-                .simultaneousGesture(rubGesture(size))
+                .gesture(DragGesture(minimumDistance: 0)
+                    .onChanged { v in model.touchChanged(logical(v.location, size)) }
+                    .onEnded { v in model.touchEnded(logical(v.location, size)) })
 
                 VStack(spacing: 2) {
                     if !busy { topRow(needs) }
-                    if let r = model.rub { rubBar(r) }
                     Text(model.screenText)
                         .font(.system(size: model.timerText != nil && now() >= model.messageUntil && model.rub == nil ? 24 : 12, weight: .bold))
                         .foregroundColor(Palette.ink)
@@ -210,7 +211,11 @@ struct HomeView: View {
                         .background(Palette.lcd.opacity(0.9))
                         .clipShape(RoundedRectangle(cornerRadius: 4))
                     Spacer(minLength: 0)
-                    if busy { busyButton } else { bottomRow(needs) }
+                    if let r = model.rub { rubBar(r) }
+                    else if !busy { bottomRow(needs) }
+                    else if model.s.act?.type == "walk" && !model.stepsAvailable {
+                        Button("걸음 +500 (시험용)") { model.addTestSteps() }.font(.system(size: 11)).buttonStyle(.plain).foregroundColor(Palette.ink)
+                    }
                 }
                 .padding(.top, 30)
                 .padding(.bottom, 6)
@@ -223,12 +228,6 @@ struct HomeView: View {
     private func logical(_ p: CGPoint, _ size: CGSize) -> CGPoint {
         let unit = max(size.width / 198, size.height / 242)
         return CGPoint(x: (p.x - (size.width - 198 * unit) / 2) / unit, y: (p.y - (size.height - 242 * unit) / 2) / unit)
-    }
-
-    private func rubGesture(_ size: CGSize) -> some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { v in if model.rub != nil { model.rubMoved(to: logical(v.location, size)) } }
-            .onEnded { _ in model.rubEnded() }
     }
 
     private func topRow(_ n: Set<String>) -> some View {
@@ -257,26 +256,11 @@ struct HomeView: View {
                 RoundedRectangle(cornerRadius: 4).stroke(Palette.ink, lineWidth: 1.5)
             }
         }
-        .frame(height: 9)
-        .padding(.horizontal, 12)
+        .frame(height: 10)
+        .padding(.horizontal, 22)
+        .padding(.bottom, 8)
     }
 
-    @ViewBuilder private var busyButton: some View {
-        if model.rub != nil {
-            WideButton(title: "그만하기") { model.cancelRub() }
-        } else if model.s.focusEnd != nil {
-            let long = Catalog.courses[model.s.course].minutes >= 180
-            WideButton(title: "일찍 부르기", sub: long ? "지난 시간만큼 보물을 가져와요" : "빈손으로 돌아와요") { model.recall() }
-        } else if let a = model.s.act {
-            if a.type == "walk" && !model.stepsAvailable {
-                Button("걸음 +500 (시험용)") { model.addTestSteps() }.font(.system(size: 11)).buttonStyle(.plain).foregroundColor(Palette.ink)
-            }
-            WideButton(title: a.type == "read" ? "책 덮기" : "산책 끝내기",
-                       sub: a.type == "read" ? (Catalog.genre(a.genre)?.name ?? "") : "걸은 만큼 보상을 받아요") { model.finishAct() }
-        } else {
-            WideButton(title: "쉬는 시간 끝내기") { model.endRest() }
-        }
-    }
 }
 
 // MARK: 식사

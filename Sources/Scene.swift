@@ -24,6 +24,12 @@ struct Stage {
         context.draw(Image(decorative: cg, scale: 1).interpolation(.none), in: rect)
     }
 
+    func draw(_ s: Sprite, x: Double, y: Double, width: Double, height: Double) {
+        guard let cg = s.image else { return }
+        let rect = CGRect(x: ox + CGFloat(x) * unit, y: oy + CGFloat(y) * unit, width: CGFloat(width) * unit, height: CGFloat(height) * unit)
+        context.draw(Image(decorative: cg, scale: 1).interpolation(.none), in: rect)
+    }
+
     func fill(_ color: Color, _ x: Int, _ y: Int, _ w: Int, _ h: Int) {
         let rect = CGRect(x: ox + CGFloat(x) * unit, y: oy + CGFloat(y) * unit, width: CGFloat(w) * unit, height: CGFloat(h) * unit)
         context.fill(Path(rect), with: .color(color))
@@ -97,22 +103,24 @@ enum Scene {
             return
         }
         if let r = m.rub {
-            let moving = now() - r.movedAt < 0.25
-            if r.type == "wash" {
-                background("bg_bath")
-                let base = m.pose("bath", 0)
-                put(moving ? m.pose("bath", f % 3) : base, mid(base))
-                if moving, let p = r.pointer {
-                    for i in 0..<3 {
-                        st.draw(Art.crow("st_drop"), Int(p.x) - 8 + (f + i * 7) % 22 - 11, Int(p.y) - 10 + (f * 3 + i * 11) % 18 - 9)
-                    }
-                }
-            } else {
-                homeBackground()
-                let x = mid(front)
-                put(moving ? (teen ? front : m.pose("blinkF")) : front, x, lift: moving && f % 2 == 1 ? 1 : 0)
-                if moving { st.draw(Art.crow("st_heart"), min(176, x + front.width), G - front.height + (f % 4 < 2 ? 0 : 3)) }
-                if let p = r.pointer { st.draw(Art.crow("ic_pet"), Int(p.x) - 14, Int(p.y) - 14) }
+            let n = now()
+            let moving = n - r.movedAt < 0.25
+            background(r.type == "wash" ? "bg_bath" : "bg_out")
+            let eyes = moving && !teen ? m.pose("blinkF") : front
+            let c = m.closeUp(front, at: n)
+            let w = Double(front.width) * c.scale, h = Double(front.height) * c.scale
+            st.draw(eyes, x: c.x, y: c.y - (moving && f % 2 == 1 ? 2 : 0), width: w, height: h)
+            if let a = front.anchor, !s.hat.isEmpty {
+                let hat = Art.sprite("hats/\(s.hat)_\(s.stage)")
+                let hw = Double(hat.width) * c.scale, hh = Double(hat.height) * c.scale
+                st.draw(hat, x: c.x + Double(a.x) * c.scale - hw / 2, y: c.y + Double(a.y) * c.scale + hh * 0.35 - hh, width: hw, height: hh)
+            }
+            let art = Art.crow(r.type == "wash" ? "st_drop" : "st_heart")
+            for pop in r.pops {
+                let age = n - pop.born
+                let size = 0.7 + min(1, age / 0.3) * 0.9
+                st.draw(art, x: pop.x + pop.drift * age - Double(art.width) * size / 2, y: pop.y - 58 * age - Double(art.height) * size / 2,
+                        width: Double(art.width) * size, height: Double(art.height) * size)
             }
             return
         }

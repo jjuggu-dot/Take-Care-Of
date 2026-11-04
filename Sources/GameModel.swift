@@ -62,6 +62,7 @@ struct Loot {
     var note = ""
 }
 
+struct Pop { var x, y, born: Double; var drift: Double }
 struct Rub {
     var type: String
     var progress = 0.0
@@ -70,6 +71,9 @@ struct Rub {
     var movedAt = 0.0
     var idleAt: Double
     var startClean: Double
+    var startedAt: Double
+    var pops: [Pop] = []
+    var sincePop = 0.0
 }
 
 struct WormSlot { var type: String; var born: Double; var until: Double }
@@ -431,28 +435,99 @@ final class GameModel: ObservableObject {
     // MARK: 문지르기
 
     func startRub(_ type: String) {
-        rub = Rub(type: type, idleAt: now(), startClean: s.clean)
+        rub = Rub(type: type, idleAt: now(), startClean: s.clean, startedAt: now())
         anim = ""; messageUntil = 0
     }
 
-    var rubSprite: Sprite { rub?.type == "wash" ? pose("bath", 0) : Art.crow(s.stage + "_front") }
+    /// 까마귀가 정면으로 다가온 모습의 크기와 위치
+    func closeUp(_ sprite: Sprite, at time: Double) -> (scale: Double, x: Double, y: Double) {
+        let p = min(1, (time - (rub?.startedAt ?? time)) / 0.45)
+        let t = 1 - (1 - p) * (1 - p)
+        let target = 150 / Double(max(1, sprite.height))
+        let scale = 1 + (target - 1) * t
+        return (scale, (198 - Double(sprite.width) * scale) / 2, 198 + 28 * t - Double(sprite.height) * scale)
+    }
+
+    private func insideCrow(_ p: CGPoint) -> Bool {
+        let sprite = Art.crow(s.stage + "_front")
+        let c = closeUp(sprite, at: now() + 1)
+        let w = Double(sprite.width) * c.scale
+        return p.x >= c.x - 8 && p.x <= c.x + w + 8 && p.y >= c.y - 8 && p.y <= 230
+    }
 
     func rubMoved(to p: CGPoint) {
         guard var r = rub else { return }
-        let sp = rubSprite
-        let x0 = Double(198 - sp.width) / 2
-        let inside = p.x >= x0 - 8 && p.x <= x0 + Double(sp.width) + 8 && p.y >= Double(198 - sp.height - 8) && p.y <= 206
-        r.pointer = p; r.idleAt = now()
+        let n = now()
+        let inside = insideCrow(p)
+        r.pointer = p; r.idleAt = n
         if inside, let l = r.last {
             let d = hypot(p.x - l.x, p.y - l.y)
             r.progress = min(1, r.progress + d / (r.type == "pet" ? 200 : 320))
-            r.movedAt = now()
+            r.movedAt = n
+            r.sincePop += d
+            if r.sincePop >= 16 {
+                r.sincePop = 0
+                r.pops.append(Pop(x: p.x, y: p.y, born: n, drift: Double.random(in: -14...14)))
+                if r.pops.count > 14 { r.pops.removeFirst() }
+                buzz()
+            }
             if r.type == "wash" { s.clean = cl(r.startClean + (100 - r.startClean) * r.progress) }
-            if frame % 2 == 0 { buzz() }
         }
         r.last = inside ? p : nil
         rub = r
         if r.progress >= 1 { finishRub() }
+    }
+
+    func rubTick() {
+        guard var r = rub else { return }
+        let n = now()
+        r.pops.removeAll { n - $0.born > 0.9 }
+        rub = r
+    }
+
+    // MARK: 터치 (누르기, 문지르기, 옆으로 밀기)
+
+    private var touchStart: CGPoint?
+    private var touchStartedOnCrow = false
+    private var swipeArmedUntil = 0.0
+
+    var isBusy: Bool { s.focusEnd != nil || s.breakEnd != nil || s.act != nil || rub != nil }
+
+    func touchChanged(_ p: CGPoint) {
+        if touchStart == nil {
+            touchStart = p
+            touchStartedOnCrow = rub != nil && insideCrow(p)
+            if rub != nil { rub?.last = nil }
+        }
+        if rub != nil && touchStartedOnCrow { rubMoved(to: p) }
+    }
+
+    func touchEnded(_ p: CGPoint) {
+        defer { touchStart = nil; rub?.last = nil }
+        guard let start = touchStart else { return }
+        let dx = p.x - start.x, dy = p.y - start.y
+        if abs(dx) > 40 && abs(dx) > abs(dy) * 1.5 {
+            if rub == nil || !touchStartedOnCrow { swipe() }
+            return
+        }
+        if hypot(dx, dy) < 8 && rub == nil { tapScene(p) }
+    }
+
+    /// 옆으로 밀면 그만둬요. 집중 활동은 실수를 막으려고 2.5초 안에 한 번 더 밀어야 끝나요.
+    private func swipe() {
+        if rub != nil { cancelRub(); return }
+        if s.breakEnd != nil { endRest(); return }
+        guard s.focusEnd != nil || s.act != nil else { return }
+        if now() < swipeArmedUntil {
+            swipeArmedUntil = 0
+            messageUntil = 0
+            if s.focusEnd != nil { recall() } else { finishAct() }
+        } else {
+            swipeArmedUntil = now() + 2.5
+            let long = s.focusEnd != nil && Catalog.courses[s.course].minutes < 180
+            say(long ? "한 번 더 밀면 빈손으로 돌아와요" : "한 번 더 밀면 끝나요", 2.5)
+            buzz()
+        }
     }
 
     func rubEnded() { rub?.last = nil }
@@ -481,6 +556,7 @@ final class GameModel: ObservableObject {
         s.focusEnd = Date().addingTimeInterval(seconds)
         page = .home
         notify(after: seconds, title: "\(s.name) 돌아왔어요", body: "전리품을 확인하고 함께 쉬어요.")
+        say("옆으로 두 번 밀면 일찍 불러요", 2.5)
         buzz(); save()
     }
 
@@ -555,6 +631,7 @@ final class GameModel: ObservableObject {
         s.act = Activity(type: type, start: Date(), genre: genre)
         page = .home
         if type == "walk" { startPedometer() }
+        say("옆으로 두 번 밀면 끝나요", 2.5)
         buzz(); save()
     }
 
@@ -808,7 +885,7 @@ final class GameModel: ObservableObject {
     }
 
     func tapScene(_ p: CGPoint) {
-        if rub != nil || s.stage == "egg" || p.y > 206 || p.y < 36 { return }
+        if rub != nil || s.stage == "egg" || p.y < 36 { return }
         if s.focusEnd != nil || s.breakEnd != nil || s.act != nil || s.sleeping || s.awayUntil != nil {
             if s.awayUntil == nil { page = .status }
             return
