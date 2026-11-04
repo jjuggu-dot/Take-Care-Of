@@ -56,6 +56,7 @@ enum Scene {
 
     static func draw(_ st: Stage, model m: GameModel) {
         let f = m.frame, G = ground, s = m.s
+        st.fill(Palette.lcd, -40, -40, 278, 322)
         let adult = s.stage == "adult", teen = s.stage == "teen"
         func top(_ r: Sprite, _ lift: Int = 0) -> Int { G - r.height + 1 - lift }
         func mid(_ r: Sprite) -> Int { (screenW - r.width) / 2 }

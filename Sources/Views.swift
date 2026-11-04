@@ -22,10 +22,10 @@ struct WideButton: View {
                 Text(title).font(.system(size: 14, weight: .semibold)).multilineTextAlignment(.center)
                 if let sub { Text(sub).font(.system(size: 10)).multilineTextAlignment(.center) }
             }
-            .foregroundColor(Palette.ink)
+            .foregroundColor(enabled ? Palette.ink : Palette.lcd)
             .frame(maxWidth: .infinity, minHeight: 34)
             .padding(.horizontal, 4)
-            .background(Palette.lcd.opacity(enabled ? 1 : 0.4))
+            .background(Palette.lcd.opacity(enabled ? 1 : 0.25))
             .clipShape(RoundedRectangle(cornerRadius: 9))
         }
         .buttonStyle(.plain)
@@ -51,9 +51,9 @@ struct ArtRow: View {
                 Spacer(minLength: 0)
                 if !trailing.isEmpty { Text(trailing).font(.system(size: 11, weight: .semibold)) }
             }
-            .foregroundColor(Palette.ink)
+            .foregroundColor(enabled ? Palette.ink : Palette.lcd)
             .padding(3)
-            .background(Palette.lcd.opacity(enabled ? 1 : 0.45))
+            .background(Palette.lcd.opacity(enabled ? 1 : 0.25))
             .clipShape(RoundedRectangle(cornerRadius: 9))
         }
         .buttonStyle(.plain)
@@ -193,7 +193,6 @@ struct HomeView: View {
                 Canvas { context, canvasSize in
                     Scene.draw(Stage(context: context, size: canvasSize, width: 198, height: 242), model: model)
                 }
-                .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .gesture(SpatialTapGesture().onEnded { v in
                     model.tapScene(logical(v.location, size))
@@ -213,8 +212,12 @@ struct HomeView: View {
                     Spacer(minLength: 0)
                     if busy { busyButton } else { bottomRow(needs) }
                 }
+                .padding(.top, 30)
+                .padding(.bottom, 6)
+                .padding(.horizontal, 6)
             }
         }
+        .ignoresSafeArea()
     }
 
     private func logical(_ p: CGPoint, _ size: CGSize) -> CGPoint {
@@ -609,7 +612,7 @@ struct DressView: View {
                             st.draw(hat, x + a.x - hat.width / 2, y + a.y + Int(Double(hat.height) * 0.35) - hat.height)
                         }
                     }
-                    .frame(height: 76)
+                    .frame(width: 84, height: 76)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 ForEach(Catalog.cosmetics, id: \.id) { c in
