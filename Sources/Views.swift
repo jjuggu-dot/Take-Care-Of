@@ -60,19 +60,25 @@ struct ArtRow: View {
     }
 }
 
-struct Header: View {
+/// 메뉴 화면: 제목이 시계 옆에 표시돼요.
+struct MenuPage<Content: View>: View {
     let title: String
     let back: () -> Void
+    var scroll = true
+    @ViewBuilder let content: () -> Content
     var body: some View {
-        HStack(spacing: 2) {
-            Button(action: back) {
-                Image(systemName: "chevron.left").font(.system(size: 13, weight: .bold))
-                    .foregroundColor(Palette.lcd).frame(width: 26, height: 24)
+        NavigationStack {
+            Group {
+                if scroll { ScrollView { content() } } else { content() }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("뒤로")
-            Text(title).font(.system(size: 14, weight: .bold)).foregroundColor(.white).lineLimit(1).minimumScaleFactor(0.7)
-            Spacer(minLength: 0)
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(action: back) { Image(systemName: "chevron.left") }
+                        .accessibilityLabel("뒤로")
+                }
+            }
         }
     }
 }
@@ -217,12 +223,35 @@ struct HomeView: View {
                         Button("걸음 +500 (시험용)") { model.addTestSteps() }.font(.system(size: 11)).buttonStyle(.plain).foregroundColor(Palette.ink)
                     }
                 }
-                .padding(.top, 30)
+                .padding(.top, 8)
                 .padding(.bottom, 6)
                 .padding(.horizontal, 6)
+
+                if model.confirmEnd { endDialog }
             }
         }
         .ignoresSafeArea()
+        .statusBarHidden(true)
+    }
+
+    private var endDialog: some View {
+        VStack(spacing: 5) {
+            Text("활동을 끝내시겠어요?").font(.system(size: 14, weight: .bold)).foregroundColor(Palette.ink).multilineTextAlignment(.center)
+            Text(model.endNote).font(.system(size: 11)).foregroundColor(Palette.ink).multilineTextAlignment(.center)
+            HStack(spacing: 5) {
+                Button("아니요") { model.confirmEnd = false }
+                    .font(.system(size: 14, weight: .semibold)).foregroundColor(Palette.lcd)
+                    .frame(maxWidth: .infinity, minHeight: 34).background(Palette.mid).clipShape(RoundedRectangle(cornerRadius: 8)).buttonStyle(.plain)
+                Button("네") { model.endActivity() }
+                    .font(.system(size: 14, weight: .semibold)).foregroundColor(Palette.lcd)
+                    .frame(maxWidth: .infinity, minHeight: 34).background(Palette.ink).clipShape(RoundedRectangle(cornerRadius: 8)).buttonStyle(.plain)
+            }
+        }
+        .padding(8)
+        .background(Palette.lcd)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Palette.ink, lineWidth: 2))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 12)
     }
 
     private func logical(_ p: CGPoint, _ size: CGSize) -> CGPoint {
@@ -268,9 +297,8 @@ struct HomeView: View {
 struct FoodView: View {
     @ObservedObject var model: GameModel
     var body: some View {
-        ScrollView {
+        MenuPage(title: "식사", back: { model.page = .home }) {
             VStack(spacing: 4) {
-                Header(title: "식사") { model.page = .home }
                 WideButton(title: "먹이 상점", sub: "도토리 \(model.s.acorn)개") { model.page = .foodShop }
                 ArtRow(art: "foods/worm", title: "지렁이", note: "주식 · 배부름 +30", trailing: "무료") { model.feed("worm") }
                 ForEach(Catalog.foods, id: \.id) { f in
@@ -289,9 +317,8 @@ struct FoodView: View {
 struct FoodShopView: View {
     @ObservedObject var model: GameModel
     var body: some View {
-        ScrollView {
+        MenuPage(title: "먹이 상점 · 도토리 \(model.s.acorn)", back: { model.page = .food }) {
             VStack(spacing: 4) {
-                Header(title: "먹이 상점 · 도토리 \(model.s.acorn)") { model.page = .food }
                 Text("도토리는 게임에서 모아요.").font(.system(size: 11)).foregroundColor(.white)
                 ForEach(Catalog.foods, id: \.id) { f in
                     ArtRow(art: "foods/" + f.id, title: "\(f.name) (보유 \(model.s.food[f.id] ?? 0))", note: f.note,
@@ -307,9 +334,8 @@ struct FoodShopView: View {
 struct PlayView: View {
     @ObservedObject var model: GameModel
     var body: some View {
-        ScrollView {
+        MenuPage(title: "게임", back: { model.page = .home }) {
             VStack(spacing: 5) {
-                Header(title: "게임") { model.page = .home }
                 WideButton(title: "지렁이 잡기", sub: "최고 \(model.s.bestWorm)점") { model.startWorm() }
                 WideButton(title: "보물 기억하기", sub: "최고 \(model.s.bestShiny)단계") { model.startShiny() }
             }
@@ -338,12 +364,13 @@ struct WormView: View {
     @ObservedObject var model: GameModel
     @State private var touching = false
     var body: some View {
+        MenuPage(title: "지렁이 잡기", back: { model.worm = nil; model.page = .home }, scroll: false) {
         VStack(spacing: 2) {
-            Header(title: "지렁이 잡기") { model.worm = nil; model.page = .home }
             if let g = model.worm {
                 GameHud(lives: g.lives, middle: "콤보 \(g.combo)", right: "\(g.score)점 \(Int(max(0, g.left).rounded(.up)))초")
                 gameCanvas(g)
             }
+        }
         }
     }
     private func gameCanvas(_ g: WormGame) -> some View {
@@ -371,8 +398,8 @@ struct WormView: View {
 struct ShinyView: View {
     @ObservedObject var model: GameModel
     var body: some View {
+        MenuPage(title: "보물 기억하기", back: { model.shiny = nil; model.page = .home }, scroll: false) {
         VStack(spacing: 2) {
-            Header(title: "보물 기억하기") { model.shiny = nil; model.page = .home }
             if let g = model.shiny {
                 GameHud(lives: g.lives, middle: phaseText(g), right: "\(g.level)단계")
                 GeometryReader { geo in
@@ -389,6 +416,7 @@ struct ShinyView: View {
                 .aspectRatio(198.0 / 136.0, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
+        }
         }
     }
     private func phaseText(_ g: ShinyGame) -> String {
@@ -407,9 +435,8 @@ struct ShinyView: View {
 struct FocusMenuView: View {
     @ObservedObject var model: GameModel
     var body: some View {
-        ScrollView {
+        MenuPage(title: "함께 집중", back: { model.page = .home }) {
             VStack(spacing: 4) {
-                Header(title: "함께 집중") { model.page = .home }
                 row("explore", "탐험", "시간을 골라 보내요") { model.page = .explore }
                 row("read", "책읽기", "책을 골라 읽고 직접 끝내요") { model.page = .genre }
                 row("walk", "산책", "걸은 만큼 보상을 받아요") { model.startAct("walk") }
@@ -427,9 +454,8 @@ struct FocusMenuView: View {
 struct GenreView: View {
     @ObservedObject var model: GameModel
     var body: some View {
-        ScrollView {
+        MenuPage(title: "무슨 책을 읽을까요?", back: { model.page = .focusMenu }) {
             VStack(spacing: 4) {
-                Header(title: "무슨 책을 읽을까요?") { model.page = .focusMenu }
                 ForEach(Catalog.genres, id: \.id) { g in
                     let c = model.s.genreCount[g.id] ?? 0
                     ArtRow(art: "hats/book_" + g.id, title: "\(g.name) · \(c)회",
@@ -445,9 +471,8 @@ struct GenreView: View {
 struct ExploreView: View {
     @ObservedObject var model: GameModel
     var body: some View {
-        ScrollView {
+        MenuPage(title: "탐험", back: { model.page = .focusMenu }) {
             VStack(spacing: 4) {
-                Header(title: "탐험") { model.page = .focusMenu }
                 ForEach(Array(Catalog.courses.enumerated()), id: \.offset) { i, c in
                     row(i, c)
                 }
@@ -517,9 +542,8 @@ struct LootView: View {
 struct TreasureView: View {
     @ObservedObject var model: GameModel
     var body: some View {
-        ScrollView {
+        MenuPage(title: "\(model.s.name)의 보물상자", back: { model.page = .home }) {
             VStack(spacing: 4) {
-                Header(title: "\(model.s.name)의 보물상자") { model.page = .home }
                 Text("\(model.stageLabel) · \(model.personality)").font(.system(size: 11)).foregroundColor(.white)
                 if model.s.nest < 2 {
                     WideButton(title: model.s.nest == 0 ? "푹신한 둥지 만들기" : "장식된 둥지 만들기",
@@ -558,9 +582,8 @@ struct ShopView: View {
     @ObservedObject var model: GameModel
     private var coins: Int { model.s.inv["coin"] ?? 0 }
     var body: some View {
-        ScrollView {
+        MenuPage(title: "상점 · 동전 \(coins)개", back: { model.page = .treasure }) {
             VStack(spacing: 4) {
-                Header(title: "상점 · 동전 \(coins)개") { model.page = .treasure }
                 WideButton(title: "특별 간식", sub: "동전 1 · 기분 +30, 배부름 +20", enabled: coins >= 1) { model.buySnack() }
                 ForEach(Catalog.shop, id: \.id) { it in
                     let owned = model.s.owned.contains(it.id)
@@ -580,9 +603,8 @@ struct ShopView: View {
 struct DressView: View {
     @ObservedObject var model: GameModel
     var body: some View {
-        ScrollView {
+        MenuPage(title: "꾸미기", back: { model.page = .treasure }) {
             VStack(spacing: 4) {
-                Header(title: "꾸미기") { model.page = .treasure }
                 Text("도토리 \(model.s.acorn) · 보석 \(model.s.gem)").font(.system(size: 11)).foregroundColor(.white)
                 if model.s.stage != "egg" {
                     Canvas { context, size in
@@ -629,9 +651,8 @@ struct DressView: View {
 struct GoalsView: View {
     @ObservedObject var model: GameModel
     var body: some View {
-        ScrollView {
+        MenuPage(title: "세트·메달", back: { model.page = .treasure }) {
             VStack(alignment: .leading, spacing: 4) {
-                Header(title: "세트·메달") { model.page = .treasure }
                 ForEach(Catalog.sets, id: \.id) { set in
                     let have = set.items.filter { model.s.seen.contains($0) }.count
                     line("\(model.s.sets.contains(set.id) ? "완성 " : "")\(set.name) \(have)/\(set.items.count)", set.note)
@@ -658,9 +679,8 @@ struct StatusView: View {
     var body: some View {
         let level = model.bondLevel
         let bond = Catalog.bonds[level]
-        ScrollView {
+        MenuPage(title: "상태", back: { model.page = .home }) {
             VStack(alignment: .leading, spacing: 5) {
-                Header(title: "상태") { model.page = .home }
                 Text("\(model.s.name) · \(model.stageLabel)").font(.system(size: 16, weight: .bold)).foregroundColor(Palette.lcd).lineLimit(1).minimumScaleFactor(0.7)
                 Text("\(Int(model.s.age / 1440))일째 · \(model.personality)\(model.s.sick ? " · 아픔" : model.s.sleeping ? " · 자는 중" : "")")
                     .font(.system(size: 11)).foregroundColor(.white)

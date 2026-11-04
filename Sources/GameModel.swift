@@ -113,6 +113,7 @@ final class GameModel: ObservableObject {
     @Published var worm: WormGame?
     @Published var shiny: ShinyGame?
     @Published var confirmReset = false
+    @Published var confirmEnd = false
 
     var messageUntil = 0.0
     var anim = ""
@@ -174,6 +175,7 @@ final class GameModel: ObservableObject {
         case "wash": startRub("wash")
         case "pet": startRub("pet")
         case "sleep": s.sleeping = true
+        case "confirm": s.act = Activity(type: "read", start: Date().addingTimeInterval(-754), genre: "poetry"); confirmEnd = true
         default: break
         }
     }
@@ -489,7 +491,6 @@ final class GameModel: ObservableObject {
 
     private var touchStart: CGPoint?
     private var touchStartedOnCrow = false
-    private var swipeArmedUntil = 0.0
 
     var isBusy: Bool { s.focusEnd != nil || s.breakEnd != nil || s.act != nil || rub != nil }
 
@@ -513,21 +514,27 @@ final class GameModel: ObservableObject {
         if hypot(dx, dy) < 8 && rub == nil { tapScene(p) }
     }
 
-    /// 옆으로 밀면 그만둬요. 집중 활동은 실수를 막으려고 2.5초 안에 한 번 더 밀어야 끝나요.
+    /// 옆으로 밀면 그만둬요. 집중 활동과 쉬는 시간은 네/아니요로 한 번 더 물어봐요.
     private func swipe() {
         if rub != nil { cancelRub(); return }
-        if s.breakEnd != nil { endRest(); return }
-        guard s.focusEnd != nil || s.act != nil else { return }
-        if now() < swipeArmedUntil {
-            swipeArmedUntil = 0
-            messageUntil = 0
-            if s.focusEnd != nil { recall() } else { finishAct() }
-        } else {
-            swipeArmedUntil = now() + 2.5
-            let long = s.focusEnd != nil && Catalog.courses[s.course].minutes < 180
-            say(long ? "한 번 더 밀면 빈손으로 돌아와요" : "한 번 더 밀면 끝나요", 2.5)
-            buzz()
+        guard s.focusEnd != nil || s.act != nil || s.breakEnd != nil else { return }
+        confirmEnd = true
+        buzz()
+    }
+
+    var endNote: String {
+        if s.breakEnd != nil { return "쉬는 시간을 끝내요." }
+        if s.focusEnd != nil {
+            return Catalog.courses[s.course].minutes >= 180 ? "지난 시간만큼 보물을 가져와요." : "지금 끝내면 빈손으로 돌아와요."
         }
+        return s.act?.type == "read" ? "읽은 시간만큼 보상을 받아요." : "걸은 만큼 보상을 받아요."
+    }
+
+    func endActivity() {
+        confirmEnd = false
+        if s.breakEnd != nil { endRest() }
+        else if s.focusEnd != nil { recall() }
+        else if s.act != nil { finishAct() }
     }
 
     func rubEnded() { rub?.last = nil }
@@ -556,7 +563,7 @@ final class GameModel: ObservableObject {
         s.focusEnd = Date().addingTimeInterval(seconds)
         page = .home
         notify(after: seconds, title: "\(s.name) 돌아왔어요", body: "전리품을 확인하고 함께 쉬어요.")
-        say("옆으로 두 번 밀면 일찍 불러요", 2.5)
+        say("옆으로 밀면 끝낼 수 있어요", 2.5)
         buzz(); save()
     }
 
@@ -609,6 +616,7 @@ final class GameModel: ObservableObject {
     }
 
     private func completeFocus() {
+        confirmEnd = false
         let c = Catalog.courses[s.course]
         s.focusEnd = nil; s.focusMin += c.minutes; s.focusCount += 1
         s.happy = cl(s.happy + min(30, Double(c.minutes) * 0.4))
@@ -631,7 +639,7 @@ final class GameModel: ObservableObject {
         s.act = Activity(type: type, start: Date(), genre: genre)
         page = .home
         if type == "walk" { startPedometer() }
-        say("옆으로 두 번 밀면 끝나요", 2.5)
+        say("옆으로 밀면 끝낼 수 있어요", 2.5)
         buzz(); save()
     }
 
@@ -722,6 +730,7 @@ final class GameModel: ObservableObject {
     func endRest() { s.breakEnd = nil; cancelNotifications(); save() }
 
     private func completeBreak() {
+        confirmEnd = false
         s.breakEnd = nil
         s.happy = cl(s.happy + 10); s.energy = cl(s.energy + 15); s.bond = cl(s.bond + 2)
         say("함께 잘 쉬었어요"); startAnim("joy", 1.4); buzz(); save()
