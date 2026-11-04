@@ -60,26 +60,38 @@ struct ArtRow: View {
     }
 }
 
-/// 메뉴 화면: 제목이 시계 옆에 표시돼요.
+/// 메뉴 화면: 왼쪽 위 뒤로 버튼과 제목을 시계와 같은 줄에 직접 그려요.
 struct MenuPage<Content: View>: View {
     let title: String
     let back: () -> Void
     var scroll = true
     @ViewBuilder let content: () -> Content
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 2) {
+            HStack(spacing: 1) {
+                Button(action: back) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(Palette.lcd)
+                        .frame(width: 24, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("뒤로")
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Spacer(minLength: 56)
+            }
+            .padding(.top, 8)
+            .padding(.leading, 10)
             Group {
                 if scroll { ScrollView { content() } } else { content() }
             }
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(action: back) { Image(systemName: "chevron.left") }
-                        .accessibilityLabel("뒤로")
-                }
-            }
         }
+        .ignoresSafeArea(edges: .top)
     }
 }
 
@@ -223,7 +235,7 @@ struct HomeView: View {
                         Button("걸음 +500 (시험용)") { model.addTestSteps() }.font(.system(size: 11)).buttonStyle(.plain).foregroundColor(Palette.ink)
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, 30)
                 .padding(.bottom, 6)
                 .padding(.horizontal, 6)
 
@@ -231,8 +243,6 @@ struct HomeView: View {
             }
         }
         .ignoresSafeArea()
-        .toolbar(.hidden, for: .navigationBar)
-        .persistentSystemOverlays(.hidden)
     }
 
     private var endDialog: some View {
