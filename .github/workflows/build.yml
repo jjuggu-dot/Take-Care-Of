@@ -29,6 +29,8 @@ jobs:
     name: Simulator screenshots
     needs: compile
     runs-on: macos-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Build for a simulator device and capture
@@ -49,10 +51,17 @@ jobs:
             sleep 4
             xcrun simctl io "$SIM" screenshot "shots/$page.png"
           done
-      - uses: actions/upload-artifact@v4
-        with:
-          name: screenshots
-          path: shots
+      - name: Publish screenshots to a separate branch
+        run: |
+          cd shots
+          git init -q -b ci-screenshots
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Simulator screenshots for ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci-screenshots
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   testflight:
     name: Upload to TestFlight
