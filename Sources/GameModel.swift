@@ -155,7 +155,8 @@ final class GameModel: ObservableObject {
         s.saved = Date()
         s.owned = ["deco_flower"]
         if env["CROW_SICK"] != nil { s.sick = true }
-        front = true; walking = false; modeTimer = 9999; x = 12
+        front = true; walking = false; modeTimer = 9999; x = 60
+        if let h = env["CROW_HOUR"], let v = Double(h) { testHour = v }
         switch demo {
         case "status": page = .status
         case "food": page = .food
@@ -175,6 +176,7 @@ final class GameModel: ObservableObject {
         case "wash": startRub("wash")
         case "pet": startRub("pet")
         case "sleep": s.sleeping = true
+        case "nest2": s.nest = 2
         case "loot":
             var l = Loot(); l.items = ["feather", "button", "coin"]; l.rest = 10; l.acorn = 5; l.unlock = ["탐험 모자"]
             loot = l; page = .loot
@@ -863,10 +865,11 @@ final class GameModel: ObservableObject {
             modeTimer = walking ? Int.random(in: 8...20) : Int.random(in: 16...40)
         }
         let w = Art.crow((s.stage == "egg" ? "baby" : s.stage) + "_side").width
-        let mx = 192 - w
+        let mn = nestX + 2
+        let mx = max(mn, nestX + nestSprite().width - 2 - w)
         if approachTimer > 0 {
             approachTimer -= 1
-            let tx = (198 - w) / 2
+            let tx = nestX + (nestSprite().width - w) / 2
             if !calm { approachTimer = 0 }
             else if abs(x - tx) > 3 { walking = true; left = x > tx; x += left ? -3 : 3; bubble = ""; return }
             else { walking = false; front = true; bubble = "hearts"; modeTimer = max(modeTimer, 2); return }
@@ -874,10 +877,10 @@ final class GameModel: ObservableObject {
         if greetTimer > 0 { greetTimer -= 1 }
         if walking && anim.isEmpty && !s.sleeping && s.happy >= 25 && !s.sick && frame % 2 == 0 {
             x += left ? -3 : 3
-            if x < 6 { x = 6; left = false }
+            if x < mn { x = mn; left = false }
             if x > mx { x = mx; left = true }
         }
-        x = max(6, min(x, mx))
+        x = max(mn, min(x, mx))
         bubbleTimer -= 1
         if bubbleTimer <= 0 {
             bubbleTimer = Int.random(in: 12...28)
@@ -892,8 +895,24 @@ final class GameModel: ObservableObject {
         return Art.crow(prefix + name + (i.map(String.init) ?? ""))
     }
 
-    func nestSprite() -> Sprite {
-        Art.crow("nest\(min(s.nest, 2))_\(s.stage == "egg" ? "baby" : s.stage)")
+    func nestSprite() -> Sprite { Art.crow("n\(min(s.nest, 2))") }
+    var nestX: Int { 110 - nestSprite().width / 2 }
+    var nestTop: Int { 207 - nestSprite().height }
+    var groundY: Int { nestTop + Int((Double(nestSprite().height) * 0.6).rounded()) }
+
+    /// 시간대 확인용 시각. 시뮬레이터 시연이나 시험 설정에서만 값이 들어가요.
+    var testHour: Double?
+    var hourNow: Double {
+        if let testHour { return testHour }
+        let c = Calendar.current.dateComponents([.hour, .minute], from: Date())
+        return Double(c.hour ?? 12) + Double(c.minute ?? 0) / 60
+    }
+
+    func cycleTestHour() {
+        let list: [Double?] = [nil, 5, 8, 13, 18, 20, 0]
+        let i = list.firstIndex { $0 == testHour } ?? 0
+        testHour = list[(i + 1) % list.count]
+        objectWillChange.send()
     }
 
     func tapScene(_ p: CGPoint) {
@@ -903,10 +922,10 @@ final class GameModel: ObservableObject {
             return
         }
         let cr = Art.crow(s.stage + "_front")
-        if Int(p.x) >= x - 6 && Int(p.x) <= x + cr.width + 10 && Int(p.y) >= 198 - cr.height { page = .status; return }
         let n = nestSprite()
-        let nx = 192 - n.width
-        if Int(p.x) >= nx && Int(p.x) <= nx + n.width && Int(p.y) >= 198 - n.height { open(.treasure) }
+        let rim = Double(nestTop) + Double(n.height) * 0.4
+        if p.y < rim && Int(p.x) >= x - 6 && Int(p.x) <= x + cr.width + 10 && Int(p.y) >= groundY - cr.height { page = .status; return }
+        if Int(p.x) >= nestX && Int(p.x) <= nestX + n.width && Int(p.y) >= nestTop { open(.treasure) }
     }
 
     // MARK: 지렁이 잡기

@@ -39,11 +39,6 @@ struct Stage {
 }
 
 enum Scene {
-    private static let ground = 198
-    private static let screenW = 198
-
-    private static func half(_ s: Sprite) -> (CGImage?, Int, Int) { (s.image, s.width / 2, s.height / 2) }
-
     private static func wear(_ st: Stage, _ m: GameModel, _ s: Sprite, _ x: Int, _ y: Int, flip: Bool, hide: Bool) {
         if let a = s.anchor, !m.s.hat.isEmpty, !hide {
             let hat = Art.sprite("hats/\(m.s.hat)_\(m.s.stage)")
@@ -60,52 +55,116 @@ enum Scene {
         }
     }
 
+    private static func period(_ h: Double) -> (sky: Color, shift: Int, night: Bool, stars: Int) {
+        func c(_ r: Int, _ g: Int, _ b: Int) -> Color { Color(red: Double(r) / 255, green: Double(g) / 255, blue: Double(b) / 255) }
+        if h >= 4 && h < 6 { return (c(0x8E, 0x9C, 0x7E), 1, true, 3) }
+        if h >= 6 && h < 11 { return (c(0xC4, 0xD2, 0xAF), 0, false, 0) }
+        if h >= 11 && h < 16 { return (c(0xCF, 0xDC, 0xBB), 0, false, 0) }
+        if h >= 16 && h < 19 { return (c(0xA4, 0xB5, 0x90), 1, false, 0) }
+        if h >= 19 && h < 22 { return (c(0x5F, 0x6C, 0x53), 2, true, 2) }
+        return (c(0x4E, 0x5A, 0x44), 2, true, 1)
+    }
+
+    private static func moonPhase() -> Double {
+        let reference = Date(timeIntervalSince1970: 947182440) // 2000-01-06 18:14 UTC 신월
+        let p = Date().timeIntervalSince(reference) / 86400 / 29.530588
+        return p - floor(p)
+    }
+
+    private static func drawSky(_ st: Stage, _ m: GameModel) {
+        let h = m.hourNow, per = period(h), t = now()
+        st.fill(per.sky, -40, -40, 278, 322)
+        let bright = Color(red: 0.86, green: 0.90, blue: 0.78)
+        let dim = Color(red: 0.64, green: 0.71, blue: 0.56)
+        if per.night {
+            for i in 0..<46 where i % per.stars == 0 {
+                let x = (i * 73 + 11) % 198, y = (i * 37 + 8 + (i * i) % 41) % 118 + 30
+                let a = sin(t * 1.6 + Double(i) * 1.7)
+                if a < -0.5 { continue }
+                st.fill(a > 0.4 ? bright : dim, x, y, 1, 1)
+                if a > 0.8 { st.fill(bright, x - 1, y, 3, 1); st.fill(bright, x, y - 1, 1, 3) }
+            }
+            let progress = ((h - 19 + 24).truncatingRemainder(dividingBy: 24)) / 11
+            let mx = Int(progress * 210 - 6), my = Int(112 - 72 * sin(.pi * min(1, progress)))
+            let phase = moonPhase(), c = cos(2 * .pi * phase), r = 12
+            for y in -r...r {
+                let half = (Double(r * r - y * y)).squareRoot()
+                let span = Int(half.rounded())
+                for x in -span...span where span > 0 || x == 0 {
+                    let limit = half * c
+                    let lit = phase < 0.5 ? Double(x) >= limit : Double(x) <= -limit
+                    st.fill(lit ? bright : Palette.mid, mx + x, my + y, 1, 1)
+                }
+            }
+        } else {
+            let progress = (h - 6) / 13
+            let sx = Int(progress * 210 - 6), sy = Int(116 - 76 * sin(.pi * progress))
+            for y in -9...9 {
+                let w = Int((Double(81 - y * y)).squareRoot().rounded())
+                st.fill(bright, sx - w, sy + y, w * 2 + 1, 1)
+            }
+            for i in 0..<8 {
+                let angle = Double(i) * .pi / 4
+                st.fill(dim, sx + Int(13 * cos(angle)) - 1, sy + Int(13 * sin(angle)) - 1, 3, 3)
+            }
+            for (key, y, speed, offset) in [("cloud0", 46, 3.0, 0.0), ("cloud1", 78, 2.0, 120.0), ("cloud2", 104, 4.0, 60.0)] {
+                let x = (t * speed + offset).truncatingRemainder(dividingBy: 278) - 70
+                st.draw(Art.crow(key), Int(x), y)
+            }
+        }
+        st.draw(Art.tree(shift: per.shift), 0, 0)
+    }
+
     static func draw(_ st: Stage, model m: GameModel) {
-        let f = m.frame, G = ground, s = m.s
-        st.fill(Palette.lcd, -40, -40, 278, 322)
+        let f = m.frame, s = m.s
+        let G = m.groundY
         let adult = s.stage == "adult", teen = s.stage == "teen"
+        let nest = m.nestSprite(), nx = m.nestX, nt = m.nestTop
+        let rimRow = Int((Double(nest.height) * 0.4).rounded())
         func top(_ r: Sprite, _ lift: Int = 0) -> Int { G - r.height + 1 - lift }
-        func mid(_ r: Sprite) -> Int { (screenW - r.width) / 2 }
+        func mid(_ r: Sprite) -> Int { nx + (nest.width - r.width) / 2 }
         func put(_ r: Sprite, _ x: Int, flip: Bool = false, lift: Int = 0, hide: Bool = false) {
             st.draw(r, x, top(r, lift), flip: flip)
             wear(st, m, r, x, top(r, lift), flip: flip, hide: hide)
         }
-        func background(_ key: String) { st.draw(Art.sprite("bgs/" + key), 0, 0) }
-        let nest = m.nestSprite()
-        func homeBackground() {
-            background("bg_out")
-            for (id, art, x) in [("deco_flower", "flower", 6), ("deco_mush", "mush", 38), ("deco_grass", "grass", 70)] where s.owned.contains(id) {
-                st.draw(Art.crow(art), x, G - 24)
+        func background(_ key: String) { st.fill(Palette.lcd, -40, -40, 278, 322); st.draw(Art.sprite("bgs/" + key), 0, 0) }
+        func scene() {
+            drawSky(st, m)
+            for (id, art, x, y) in [("deco_flower", "flower", 4, 146), ("deco_mush", "mush", 176, 138), ("deco_grass", "grass", 22, 132)] where s.owned.contains(id) {
+                st.draw(Art.crow(art), x, y)
             }
-            let nx = 192 - nest.width
-            st.draw(nest, nx, G - nest.height + 4)
+            st.draw(nest, nx, nt)
+        }
+        func rim() {
+            if let cg = nest.bottomSlice(from: rimRow) { st.draw(cg, nx, nt + rimRow, nest.width, nest.height - rimRow) }
             let shown = s.display.filter { (s.inv[$0] ?? 0) > 0 }.prefix(4)
             for (i, id) in shown.enumerated() {
                 let item = Art.sprite("items/" + id)
                 if let cg = item.image {
-                    st.draw(cg, max(4, nx - 72) + i * 18, G + 2 - item.height / 2, item.width / 2, item.height / 2)
+                    st.draw(cg, nx + 18 + i * 22, nt + nest.height - 26 - (i % 2) * 4, item.width / 2, item.height / 2)
                 }
             }
         }
-        func middleNest() { background("bg_out"); st.draw(nest, mid(nest), G - nest.height + 4) }
 
         if s.stage == "egg" {
-            middleNest()
+            scene()
             let t = s.eggTime
             let egg = Art.crow(t > 6 ? "egg0" : t > 4.5 ? (f % 4 < 2 ? "egg1" : "egg2") : t > 3 ? "egg3" : t > 1.2 ? "egg4" : "egg5")
-            st.draw(egg, mid(egg), top(egg, 13))
+            st.draw(egg, mid(egg), top(egg, -6))
+            rim()
             return
         }
         let front = Art.crow(s.stage + "_front")
         if s.awayUntil != nil || (s.focusEnd != nil && s.stage != "baby") {
-            middleNest()
-            if s.awayUntil != nil { let feather = Art.crow("feather"); st.draw(feather, 85, top(feather, 22)) }
+            scene()
+            if s.awayUntil != nil { st.draw(Art.crow("feather"), nx + 40, nt + 2) }
+            rim()
             return
         }
         if let r = m.rub {
             let n = now()
             let moving = n - r.movedAt < 0.25
-            background(r.type == "wash" ? "bg_bath" : "bg_out")
+            if r.type == "wash" { background("bg_bath") } else { scene() }
             let eyes = moving && !teen ? m.pose("blinkF") : front
             let c = m.closeUp(front, at: n)
             let w = Double(front.width) * c.scale, h = Double(front.height) * c.scale
@@ -125,40 +184,44 @@ enum Scene {
             return
         }
         if let act = s.act {
-            background("bg_out")
             if act.type == "read" {
+                scene()
                 put(front, mid(front))
+                rim()
                 let book = Art.sprite(act.genre.map { "hats/book_\($0)" } ?? "hats/book")
-                st.draw(book, (screenW - book.width) / 2, G - 22 - (f / 8) % 2)
+                st.draw(book, mid(book), nt + rimRow - 6 - (f / 8) % 2)
                 if let g = Catalog.genre(act.genre), !g.mark.isEmpty, f % 12 < 6 {
                     st.draw(Art.sprite(g.mark), min(176, mid(front) + front.width + 2), G - front.height + (f % 24 < 12 ? 4 : 0))
                 }
             } else {
+                background("bg_out")
                 let w = m.pose("walk", f % 3)
-                let x = Int(50 + 60 * (0.5 + 0.5 * sin(Double(f) / 30)))
-                put(w, min(196 - w.width, x), flip: cos(Double(f) / 30) < 0)
+                let x = min(196 - w.width, Int(50 + 60 * (0.5 + 0.5 * sin(Double(f) / 30))))
+                let flip = cos(Double(f) / 30) < 0
+                st.draw(w, x, 198 - w.height + 1, flip: flip)
+                wear(st, m, w, x, 198 - w.height + 1, flip: flip, hide: false)
             }
             return
         }
         if s.sleeping || s.breakEnd != nil || s.focusEnd != nil {
-            background("bg_sleep")
+            scene()
             let sl = m.pose("sleep", (f / 4) % 3)
-            put(sl, mid(sl))
+            put(sl, mid(sl), lift: -8)
+            rim()
             if s.breakEnd != nil { st.draw(Art.crow("st_heart"), 24, 112) }
             return
         }
-        homeBackground()
+        scene()
         var x = m.x
         var rows = front
         var flip = false
-        var hide = false
         let slow = (f / 3) % 2
         let a = m.anim
         let angry = adult ? Art.crow("a_angry\(f % 2)") : Art.crow(s.stage + "_angry")
         if a == "bread" { rows = m.pose("eat", f % 6 < 2 ? 0 : f % 6 < 4 ? 1 : 2) }
         else if a == "joy" || a == "evolve" {
             rows = m.pose("happy", f % 2)
-            if a == "evolve" { st.draw(Art.crow("st_spark"), max(2, x - 22), 132) }
+            if a == "evolve" { st.draw(Art.crow("st_spark"), max(2, x - 22), G - 60) }
         }
         else if a == "no" { rows = angry; x += f % 2 == 1 ? 2 : -2 }
         else if a == "cure" {
@@ -184,9 +247,10 @@ enum Scene {
             if s.sets.contains("rare") && f % 96 < 8 { rows = m.pose("happy", 1) }
             else if s.sets.contains("common") && f % 64 < 8 { rows = m.pose("happy", 0) }
         }
-        x = max(2, min(x, 196 - rows.width))
-        put(rows, x, flip: flip, hide: hide)
-        hide = false
+        let low = nx + 2, high = max(low, nx + nest.width - 2 - rows.width)
+        x = max(low, min(x, high))
+        put(rows, x, flip: flip)
+        rim()
         if s.sick && a.isEmpty {
             let skull = Art.crow("st_skull")
             st.draw(skull, min(196 - skull.width, x + rows.width - 6), max(44, G - rows.height - skull.height + 3))

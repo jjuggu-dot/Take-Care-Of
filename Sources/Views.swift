@@ -582,9 +582,12 @@ struct TreasureView: View {
     }
     /// 시험용 속도 설정. 출시 전에 없앨 거예요.
     private var speedRow: some View {
+        VStack(spacing: 4) {
+        WideButton(title: "시험 시간대: \(model.testHour.map { "\(Int($0))시" } ?? "자동")", sub: "눌러서 시간대를 바꿔요") { model.cycleTestHour() }
         WideButton(title: "시험 속도: \(Int(model.s.speed))배", sub: "눌러서 1배, 60배, 360배로 바꿔요") {
             model.s.speed = model.s.speed == 1 ? 60 : model.s.speed == 60 ? 360 : 1
             model.save()
+        }
         }
     }
 }

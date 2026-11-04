@@ -51,6 +51,12 @@ jobs:
             sleep 4
             xcrun simctl io "$SIM" screenshot "shots/$page.png"
           done
+          for hour in 5 8 13 18 20 0; do
+            xcrun simctl terminate "$SIM" com.jjuggu.takecareof >/dev/null 2>&1 || true
+            SIMCTL_CHILD_CROW_DEMO="home" SIMCTL_CHILD_CROW_HOUR="$hour" xcrun simctl launch "$SIM" com.jjuggu.takecareof >/dev/null
+            sleep 4
+            xcrun simctl io "$SIM" screenshot "shots/hour$hour.png"
+          done
       - name: Publish screenshots to a separate branch
         run: |
           cd shots

@@ -42,12 +42,19 @@ final class Sprite {
 
     private static let palette: [UInt8: (UInt8, UInt8, UInt8)] = [
         UInt8(ascii: "0"): (0xDB, 0xE6, 0xC8),
+        UInt8(ascii: "L"): (0xB5, 0xC4, 0xA1),
         UInt8(ascii: "4"): (0xA4, 0xB5, 0x90),
         UInt8(ascii: "1"): (0x7D, 0x8A, 0x6E),
         UInt8(ascii: "2"): (0x4E, 0x5A, 0x44),
         UInt8(ascii: "3"): (0x23, 0x2D, 0x1E),
         UInt8(ascii: "#"): (0x23, 0x2D, 0x1E)
     ]
+
+    /// 아래쪽 일부만 잘라 낸 이미지 (둥지 앞 테두리용)
+    func bottomSlice(from row: Int) -> CGImage? {
+        guard let image, row < height else { return nil }
+        return image.cropping(to: CGRect(x: 0, y: row, width: width, height: height - row))
+    }
 
     /// 위쪽 일부만 잘라 낸 이미지 (지렁이가 올라오는 장면용)
     func topSlice(rows count: Int) -> CGImage? {
@@ -85,6 +92,22 @@ enum Art {
     }
 
     static func crow(_ key: String) -> Sprite { sprite("crow/" + key) }
+
+    /// 시간대별로 나무 명암을 어둡게 바꾼 그림
+    static func tree(shift: Int) -> Sprite {
+        let key = "tree@\(shift)"
+        if let found = cache[key] { return found }
+        let tones: [Character] = ["0", "L", "4", "1", "2", "3"]
+        let rows = (file.sprites["crow/tree"] ?? []).map { row in
+            String(row.map { ch -> Character in
+                guard let i = tones.firstIndex(of: ch) else { return ch }
+                return tones[min(tones.count - 1, i + shift)]
+            })
+        }
+        let made = Sprite(rows: rows, anchor: nil)
+        cache[key] = made
+        return made
+    }
 }
 
 enum Palette {
