@@ -85,7 +85,7 @@ enum Scene {
                 if a > 0.8 { st.fill(bright, x - 1, y, 3, 1); st.fill(bright, x, y - 1, 1, 3) }
             }
             let progress = ((h - 19 + 24).truncatingRemainder(dividingBy: 24)) / 11
-            let mx = Int(progress * 210 - 6), my = Int(112 - 72 * sin(.pi * min(1, progress)))
+            let mx = Int(progress * 210 - 6), my = Int(122 - 40 * sin(.pi * min(1, progress)))
             let phase = moonPhase(), c = cos(2 * .pi * phase), r = 12
             for y in -r...r {
                 let half = (Double(r * r - y * y)).squareRoot()
@@ -98,7 +98,7 @@ enum Scene {
             }
         } else {
             let progress = (h - 6) / 13
-            let sx = Int(progress * 210 - 6), sy = Int(116 - 76 * sin(.pi * progress))
+            let sx = Int(progress * 210 - 6), sy = Int(124 - 40 * sin(.pi * progress))
             for y in -9...9 {
                 let w = Int((Double(81 - y * y)).squareRoot().rounded())
                 st.fill(bright, sx - w, sy + y, w * 2 + 1, 1)
@@ -107,7 +107,7 @@ enum Scene {
                 let angle = Double(i) * .pi / 4
                 st.fill(dim, sx + Int(13 * cos(angle)) - 1, sy + Int(13 * sin(angle)) - 1, 3, 3)
             }
-            for (key, y, speed, offset) in [("cloud0", 46, 3.0, 0.0), ("cloud1", 78, 2.0, 120.0), ("cloud2", 104, 4.0, 60.0)] {
+            for (key, y, speed, offset) in [("cl0", 44, 3.0, 0.0), ("cl2", 68, 2.0, 120.0), ("cl3", 96, 1.5, 200.0), ("cl1", 118, 4.0, 60.0)] {
                 let x = (t * speed + offset).truncatingRemainder(dividingBy: 278) - 70
                 st.draw(Art.crow(key), Int(x), y)
             }
