@@ -231,7 +231,8 @@ struct HomeView: View {
             }
         }
         .ignoresSafeArea()
-        .statusBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
+        .persistentSystemOverlays(.hidden)
     }
 
     private var endDialog: some View {
