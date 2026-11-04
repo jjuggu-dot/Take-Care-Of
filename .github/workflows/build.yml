@@ -45,7 +45,7 @@ jobs:
           APP=$(find build/Build/Products -name '*.app' | head -1)
           xcrun simctl install "$SIM" "$APP"
           mkdir -p shots
-          for page in home status food focus genre explore treasure dress goals worm shiny read walk wash pet sleep confirm; do
+          for page in home status food foodshop play focus genre explore loot treasure shop dress goals worm shiny read walk wash pet sleep confirm; do
             xcrun simctl terminate "$SIM" com.jjuggu.takecareof >/dev/null 2>&1 || true
             SIMCTL_CHILD_CROW_DEMO="$page" xcrun simctl launch "$SIM" com.jjuggu.takecareof >/dev/null
             sleep 4

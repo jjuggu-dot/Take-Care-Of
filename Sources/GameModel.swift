@@ -175,6 +175,9 @@ final class GameModel: ObservableObject {
         case "wash": startRub("wash")
         case "pet": startRub("pet")
         case "sleep": s.sleeping = true
+        case "loot":
+            var l = Loot(); l.items = ["feather", "button", "coin"]; l.rest = 10; l.acorn = 5; l.unlock = ["탐험 모자"]
+            loot = l; page = .loot
         case "confirm": s.act = Activity(type: "read", start: Date().addingTimeInterval(-754), genre: "poetry"); confirmEnd = true
         default: break
         }
